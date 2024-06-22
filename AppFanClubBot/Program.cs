@@ -19,12 +19,19 @@
     using Newtonsoft.Json.Linq;
     using static System.Collections.Specialized.BitVector32;
     using pokenaeBaseClass;
+    using System.Reflection.Metadata;
 
     class Program
     {
         private DiscordSocketClient _client;
         public static CommandService _commands;
         public static IServiceProvider _services;
+
+        //各コマンドを格納する
+        /// <summary>
+        /// スラッシュコマンドを格納
+        /// </summary>
+        private List<IDiscordSlashCommand> SlashCommands = new List<IDiscordSlashCommand>();
 
         static void Main(string[] args)
             => new Program().MainAsync().GetAwaiter().GetResult();
@@ -64,7 +71,7 @@
             AppFanClubBotSettings settings = JsonExtensions.DeserializeFromFile<AppFanClubBotSettings>(PNBase.ExePath + "settings.json");
 
             ////テキストを受け取ったときのコマンドを追加する
-            //_client.MessageReceived += Commandpokenae;
+            _client.MessageReceived += CommandText;
 
             //リアクションを受け取ったときのコマンドを追加する
             _client.ReactionAdded += HandleReactionAsync_Add;
@@ -74,6 +81,14 @@
             //ロールが作られたときのイベント
             _client.RoleCreated += ToolCateMakeChannel;
 
+            //コマンドを格納
+            SlashCommands.Add(new DiscordSlashCommand_Question());
+            SlashCommands.Add(new DiscordSlashCommand_NewProject());
+            SlashCommands.Add(new DiscordSlashCommand_Role());
+            SlashCommands.Add(new DiscordSlashCommand_Test());
+            SlashCommands.Add(new DiscordSlashCommand_Outline());
+
+
             //次の行に書かれているstring token = "hoge"に先程取得したDiscordTokenを指定する。
             string token = settings.Token;
             await _commands.AddModulesAsync(Assembly.GetEntryAssembly(), _services);
@@ -81,6 +96,7 @@
             await _client.StartAsync();
 
             await Task.Delay(-1);
+
 
         }
 
@@ -106,370 +122,17 @@
             //botのコマンド待機時間を延長
             await command.DeferAsync();
 
-            switch (command.Data.Name)
+            foreach(var discordcommand in SlashCommands)
             {
-                case "test"://受信テスト
-                    {
-                        string Messages = "受信できています．";
+                if(command.Data.Name == discordcommand.Command)
+                {
+                    discordcommand.Event(command,_client);
 
-                        var myEmb = new EmbedBuilder()
-                            .WithTitle("受信テスト") // タイトルを設定
-                            .WithDescription(Messages) // 説明を設定
-                            .WithColor(Discord.Color.Red) //サイドの色を設定
-                            .Build();
-
-                        await command.FollowupAsync(embed: myEmb);
-
-                        break;
-                    }
-                case "outline"://botの自己紹介・概要
-                    {
-                        string Messages = "アプリ愛好会補助botです．\n" +
-                                "ロール付与などのサポートを主に行っています．\n" +
-                                "スラッシュコマンドに対応しているのでそちらよりお申し付けください．\n" +
-                                "よろしくお願いします．";
-
-                        var myEmb = new EmbedBuilder()
-                            .WithTitle("自己紹介") // タイトルを設定
-                            .WithDescription(Messages) // 説明を設定
-                            .AddField("Manufacture", "ポケなえ", true)
-                            .AddField("Command", "「/」もしくは「!」(半角)", true)
-                            .WithColor(0x6A5ACD) //サイドの色を設定
-                            .WithThumbnailUrl("https://ozaroom.com/pokenaeLogo.png")
-                            .Build();
-
-                        await command.FollowupAsync(embed: myEmb);
-
-
-                        break;
-                    }
-                case "role"://ロール付与・解除
-                    {
-                        IEmote[] emotes = new IEmote[0];
-                        string description = "";
-
-                        var embed = new EmbedBuilder();
-
-                        embed.WithTitle("ロール付与・解除");
-
-                        embed.WithColor(0x6A5ACD);
-
-                        description = "欲しいロールに対応したリアクションを押してください．\n" +
-                            "ロールを解除したいときはリアクションをもう一度押して外してください．";
-
-                        embed.WithDescription(description);
-
-                        ulong myguildID = (ulong)command.GuildId;
-                        var myguild = _client.GetGuild(myguildID);
-
-                        int roleindex = 0;
-                        foreach (var myrole in myguild.Roles)
-                        {
-                            //チャンネル管理のできないロールのみbotで管理
-                            if (myrole != null && RoleNotPermissions(myrole) && myrole.Name != "@everyone")
-                            {
-                                embed.AddField(iconUni[roleindex], myrole.Name, false);
-
-                                Array.Resize(ref emotes, roleindex + 1);
-                                emotes[roleindex] = new Emoji(iconUni[roleindex]);
-
-                                roleindex++;
-                            }
-                            //絵文字の種類数超えたら強制終了
-                            if (roleindex >= iconUni.Length)
-                            {
-                                break;
-                            }
-
-                        }
-
-                        await command.FollowupAsync(embed: embed.Build()).GetAwaiter().GetResult().AddReactionsAsync(emotes);
-
-                        break;
-                    }
-                case "newproject"://新プロジェクト発足時のロール追加とそのお知らせ
-                    {
-                        string projectname = "";
-                        bool multipleFlg = false;
-                        foreach (var commandoption in command.Data.Options)
-                        {
-                            if (commandoption.Name == "newprojectname")
-                            {
-                                projectname = commandoption.Value.ToString();
-
-                            }
-                            if (commandoption.Name == "formultiplepeople")
-                            {
-                                multipleFlg = (bool)commandoption.Value;
-
-                            }
-                        }
-
-                        if (projectname != "")
-                        {
-                            ulong myguildID = (ulong)command.GuildId;
-                            var myguild = _client.GetGuild(myguildID) as IGuild;
-
-                            bool oldroleFlg = false;
-
-                            foreach (var oldrole in myguild.Roles)
-                            {
-                                if (oldrole.Name == projectname)
-                                {
-                                    oldroleFlg |= true;
-                                    break;
-                                }
-                            }
-
-                            if (oldroleFlg == true)
-                            {
-                                var myEmbBuild = new EmbedBuilder()
-                                    .WithTitle("エラー") // タイトルを設定
-                                    .WithDescription("既に同名のロールが存在しています．") // 説明を設定
-                                    .WithColor(Discord.Color.Red) //サイドの色を設定
-                                    ;
-
-                                var myEmb = myEmbBuild.Build();
-                                await command.FollowupAsync(embed: myEmb);
-
-                                break;
-                            }
-                            else
-                            {
-                                //プロジェクト名と同じカテゴリを生成
-                                await myguild.CreateCategoryAsync(projectname);
-                                //プロジェクト名と同じロールを生成
-                                var newrole = await myguild.CreateRoleAsync(projectname, null, color: Discord.Color.Green, false, null);
-
-                                //メッセージを送信したユーザー名の取得
-                                var author = command.User.GlobalName;
-                                //メッセージを送信したユーザーのアイコンの取得
-                                var authorIcon = command.User.GetAvatarUrl();
-
-                                string Messages;
-                                if (multipleFlg == true)
-                                {
-                                    Messages = "@everyone" + Environment.NewLine + "新プロジェクト「" + projectname + "」に参加したい方はロールを取得しましょう！"
-                                     + Environment.NewLine + "ロールを取得するコマンド：" + Environment.NewLine + "/role";
-                                }
-                                else
-                                {
-                                    Messages = "@everyone" + Environment.NewLine + "新プロジェクト「" + projectname + "」に興味のある方はロールを取得しましょう！"
-                                     + Environment.NewLine + "ロールを取得するコマンド：" + Environment.NewLine + "/role";
-                                }
-
-                                var myEmbBuild = new EmbedBuilder()
-                                    .WithTitle("新規プロジェクトのお知らせ") // タイトルを設定
-                                    .WithDescription(Messages) // 説明を設定
-                                    .WithColor(0x6A5ACD) //サイドの色を設定
-                                    .WithAuthor(author,authorIcon) //コマンド実行者の情報を埋め込み
-                                    ;
-
-                                var myEmb = myEmbBuild.Build();
-
-                                await command.FollowupAsync(embed: myEmb);
-                            }
-
-                        }
-
-                        break;
-                    }
-                //case "question"://質問の立ち上げ
-                //    {
-                //        string content = "";
-                //        string detail = "";
-                //        ulong roleID = 0;
-                //        string errormess = "";
-
-                //        foreach (var commandoption in command.Data.Options)
-                //        {
-                //            if (commandoption.Name == "content")
-                //            {
-                //                content = commandoption.Value.ToString();
-
-                //            }
-                //            else if (commandoption.Name == "detail")
-                //            {
-                //                detail = commandoption.Value.ToString();
-
-                //            }
-                //            else if (commandoption.Name == "projectrole")
-                //            {
-                //                if (commandoption.Value is Discord.WebSocket.SocketRole)
-                //                {
-                //                    var myrole = commandoption.Value as Discord.WebSocket.SocketRole;
-
-                //                    if (myrole != null)
-                //                    {
-                //                        roleID = myrole.Id;
-
-                //                    }
-
-                //                }
-
-                //            }
-                //            else if (commandoption.Name == "error")
-                //            {
-                //                errormess = commandoption.Value.ToString();
-
-                //            }
-                //        }
-
-                //        if (projectname != "")
-                //        {
-                //            ulong myguildID = (ulong)command.GuildId;
-                //            var myguild = _client.GetGuild(myguildID) as IGuild;
-
-                //            bool oldroleFlg = false;
-
-                //            foreach (var oldrole in myguild.Roles)
-                //            {
-                //                if (oldrole.Name == projectname)
-                //                {
-                //                    oldroleFlg |= true;
-                //                    break;
-                //                }
-                //            }
-
-                //            if (oldroleFlg == true)
-                //            {
-                //                var myEmbBuild = new EmbedBuilder()
-                //                    .WithTitle("エラー") // タイトルを設定
-                //                    .WithDescription("既に同名のロールが存在しています．") // 説明を設定
-                //                    .WithColor(Discord.Color.Red) //サイドの色を設定
-                //                    ;
-
-                //                var myEmb = myEmbBuild.Build();
-                //                await command.FollowupAsync(embed: myEmb);
-
-                //                break;
-                //            }
-                //            else
-                //            {
-                //                //プロジェクト名と同じカテゴリを生成
-                //                await myguild.CreateCategoryAsync(projectname);
-                //                //プロジェクト名と同じロールを生成
-                //                var newrole = await myguild.CreateRoleAsync(projectname, null, color: Discord.Color.Green, false, null);
-
-                //                //メッセージを送信したユーザー名の取得
-                //                var author = command.User.GlobalName;
-                //                //メッセージを送信したユーザーのアイコンの取得
-                //                var authorIcon = command.User.GetAvatarUrl();
-
-                //                string Messages;
-                //                if (multipleFlg == true)
-                //                {
-                //                    Messages = "@everyone" + Environment.NewLine + "新プロジェクト「" + projectname + "」に参加したい方はロールを取得しましょう！"
-                //                     + Environment.NewLine + "ロールを取得するコマンド：" + Environment.NewLine + "/role";
-                //                }
-                //                else
-                //                {
-                //                    Messages = "@everyone" + Environment.NewLine + "新プロジェクト「" + projectname + "」に興味のある方はロールを取得しましょう！"
-                //                     + Environment.NewLine + "ロールを取得するコマンド：" + Environment.NewLine + "/role";
-                //                }
-
-                //                var myEmbBuild = new EmbedBuilder()
-                //                    .WithTitle("新規プロジェクトのお知らせ") // タイトルを設定
-                //                    .WithDescription(Messages) // 説明を設定
-                //                    .WithColor(0x6A5ACD) //サイドの色を設定
-                //                    .WithAuthor(author, authorIcon) //コマンド実行者の情報を埋め込み
-                //                    ;
-
-                //                var myEmb = myEmbBuild.Build();
-
-                //                await command.FollowupAsync(embed: myEmb);
-                //            }
-
-                //        }
-
-                //        break;
-                //    }
-
-
+                    break;
+                }
             }
 
         }
-
-
-        //ロール付与のために必要なもの
-        /// <summary>
-        /// 自由に行き来できるロールの権限の管理
-        /// ロールの権限の強さで自由に付与できるか否か決定する
-        /// </summary>
-        /// <param name="myrole"></param>
-        /// <returns></returns>
-        public bool RoleNotPermissions(IRole myrole)
-        {
-            bool result = false;
-
-            //有効な権限の確認
-            //https://narikakun.net/technology/discord-developer-permissions/
-            result = myrole.Permissions.KickMembers //メンバーをキック
-                //|| myrole.Permissions.CreateInstantInvite //招待の作成
-                || myrole.Permissions.BanMembers //メンバーをBAN
-                || myrole.Permissions.Administrator //管理者(ALL)
-                || myrole.Permissions.ManageChannels //チャンネル管理
-                || myrole.Permissions.ManageGuild //サーバー管理
-                                                  //|| myrole.Permissions.AddReactions //リアクションの追加
-                || myrole.Permissions.ViewAuditLog //監視ログの表示
-                || myrole.Permissions.PrioritySpeaker //優先スピーカー
-                                                      //|| myrole.Permissions.Stream //サーバー内配信
-                                                      //|| myrole.Permissions.SendMessages //メッセージ送信
-                                                      //|| myrole.Permissions.SendTTSMessages //テキスト読み上げ機能のメッセージ
-                || myrole.Permissions.ManageMessages //ピン止めや他メンバーメッセージの削除
-                                                     //|| myrole.Permissions.EmbedLinks //埋め込みリンクの送信
-                                                     //|| myrole.Permissions.AttachFiles //ファイルの添付
-                                                     //|| myrole.Permissions.MentionEveryone //全メンバーへのメンション
-                                                     //|| myrole.Permissions.UseExternalEmojis //他サーバの絵文字使用
-                                                     //|| myrole.Permissions.ViewGuildInsights //サーバーのインサイトにアクセス
-                                                     //|| myrole.Permissions.Connect //音声チャンネルに接続
-                                                     //|| myrole.Permissions.Speak //音声チャンネルでの発言
-                || myrole.Permissions.MuteMembers //音声チャンネルで他メンバーのミュート
-                                                  //|| myrole.Permissions.MoveMembers //チャンネルの移動
-                                                  //|| myrole.Permissions.UseVAD //音声検出を使用
-                                                  //|| myrole.Permissions.ChangeNickname //自分のニックネームの変更
-                || myrole.Permissions.ManageNicknames //他メンバーのニックネーム
-                || myrole.Permissions.ManageRoles //ロールの管理
-                || myrole.Permissions.ManageWebhooks //ウェブフックの管理
-                || myrole.Permissions.ManageEmojisAndStickers //絵文字，スタンプの管理
-
-
-                ;
-
-            return !(result);
-        }
-
-        
-        string[] iconUni = {
-            "\uD83C\uDDE6",
-            "\uD83C\uDDE7",
-            "\uD83C\uDDE8",
-            "\uD83C\uDDE9",
-            "\uD83C\uDDEA",
-            "\uD83C\uDDEB",
-            "\uD83C\uDDEC",
-            "\uD83C\uDDED",
-            "\uD83C\uDDEE",
-            "\uD83C\uDDEF",
-            "\uD83C\uDDF0",
-            "\uD83C\uDDF1",
-            "\uD83C\uDDF2",
-            "\uD83C\uDDF3",
-            "\uD83C\uDDF4",
-            "\uD83C\uDDF5",
-            "\uD83C\uDDF6",
-            "\uD83C\uDDF7",
-            "\uD83C\uDDF8",
-            "\uD83C\uDDF9",
-            "\uD83C\uDDFA",
-            "\uD83C\uDDFB",
-            "\uD83C\uDDFC",
-            "\uD83C\uDDFD",
-            "\uD83C\uDDFE",
-            "\uD83C\uDDFF",
-
-        };
-
 
         /// <summary>
         /// ツール関連のカテゴリが作られたときに自動で基本的なチャンネルを作る
@@ -496,16 +159,16 @@
         /// <returns></returns>
         private async Task HandleReactionAsync_Add(Cacheable<IUserMessage, ulong> message, Cacheable<IMessageChannel, ulong> channel, SocketReaction reaction)
         {
-            var message2 = await message.GetOrDownloadAsync();
-            if (message2 != null)
+            var messageRe = await message.GetOrDownloadAsync();
+            if (messageRe != null)
             {
-                var context = new CommandContext(_client, message2);
+                var context = new CommandContext(_client, messageRe);
 
                 //IDからリアクションしたユーザーを指定
                 ulong id = reaction.UserId;
                 var user = await context.Guild.GetUserAsync(id, CacheMode.AllowDownload);
 
-                foreach (Embed embed in message2.Embeds)
+                foreach (Embed embed in messageRe.Embeds)
                 {
                     string embedTitle = embed.Title;
                     string embedDescription = embed.Description;
@@ -515,6 +178,98 @@
                         case "ロール付与・解除":
                             {
                                 //ロール付与
+                                for (int i = 0; i < embed.Fields.Length; i++)
+                                {
+                                    if (embed.Fields[i].Name == reaction.Emote.Name)
+                                    {
+                                        var role = context.Guild.Roles.FirstOrDefault(x => x.Name == embed.Fields[i].Value);
+                                        if (role != null)
+                                        {
+                                            await (user).AddRoleAsync(role);
+                                        }
+                                    }
+                                }
+
+                                break;
+                            }
+                        case "Question":
+                            {
+                                //質問を解決済みにする
+                                string api_url = "https://script.google.com/macros/s/AKfycbzaiVXb2GW0oQXYsITxRrxykuEu-SuIfDm_X2M1jK9hnXjf4XDl5FuQT0R7qv9Hc6Jn-Q/exec";
+                                string url = api_url
+                                    + "?messageid=" + PNBase.Replace_GAS(messageRe.Id.ToString())
+                                    + "&resolved=" + true
+                                    ;
+
+                                var request = (HttpWebRequest)HttpWebRequest.Create(url);
+                                var response = (HttpWebResponse)request.GetResponse();
+                                string responseContent = string.Empty;
+                                using (var responseStream = response.GetResponseStream())
+                                using (var stRead = new StreamReader(responseStream))
+                                {
+                                    responseContent = stRead.ReadToEnd();
+                                }
+
+                                string json = responseContent;
+                                var newresult = JsonExtensions.DeserializeFromJson<apiResult>(json);
+
+
+
+                                ////Embedの作成
+                                //string Messages = "質問が解決しました！";
+
+                                //var myEmbBuild = new EmbedBuilder()
+                                //    .WithTitle("test") // タイトルを設定
+                                //    ;
+
+                                //if (newresult != null && newresult.Value == "ok")
+                                //{
+                                //    string api_url2 = "https://script.google.com/macros/s/AKfycbxfw1UQy99ncqJUwtkz4fgZw4TdWZsigk5-5PLHiUq7MOHWaq7pWsK7-km5WHrLUn-Z7Q/exec";
+                                //    string url2 = api_url
+                                //        + "?messageid=" + PNBase.Replace_GAS(messageRe.Id.ToString())
+                                //        ;
+
+                                //    var myjson = JsonExtensions.jsonFromMyGAS(url2);
+                                //    var myAFCQA = JsonExtensions.DeserializeFromJson <AFCQA_QA>(myjson);
+
+                                //    if (myAFCQA != null)
+                                //    {
+                                //        myEmbBuild
+                                //            .AddField("関連プロジェクト・言語", myAFCQA.ProjectRoleID, false)
+                                //            .AddField("内容", myAFCQA.Content, false)
+                                //            .AddField("詳細", myAFCQA.Detail, false)
+                                //            .AddField("エラー内容", myAFCQA.Error, false)
+                                //            .WithColor(0x6A5ACD) //サイドの色を設定
+                                //            ;
+                                //    }
+                                //    else
+                                //    {
+                                //        //myEmbBuild
+                                //        //    .AddField("関連プロジェクト・言語", roleName, false)
+                                //        //    .AddField("内容", content, false)
+                                //        //    .AddField("詳細", detail, false)
+                                //        //    .AddField("エラー内容", errormess, false)
+                                //        //    .WithAuthor(author, authorIcon) //コマンド実行者の情報を埋め込み
+                                //        //    .WithColor(0x6A5ACD) //サイドの色を設定
+                                //        //    ;
+                                //    }
+                                //}
+                                //else
+                                //{
+                                //    Messages = "質問の作成に失敗しました．";
+
+                                //    myEmbBuild.WithColor(Discord.Color.Red); //サイドの色を設定
+                                //}
+                                //myEmbBuild.WithDescription(Messages); // 説明を設定
+
+                                //var myEmb = myEmbBuild.Build();
+                                ////await channel. Async(embed: myEmb);
+
+                                break;
+                            }
+                        case "Solution":
+                            {
+                                //解決案を採用する
                                 for (int i = 0; i < embed.Fields.Length; i++)
                                 {
                                     if (embed.Fields[i].Name == reaction.Emote.Name)
@@ -597,7 +352,222 @@
 
         }
 
+        public class AFCQA_QA
+        {
+            /// <summary>
+            /// 質問メッセージのID
+            /// </summary>
+            [JsonProperty("messageid")]
+            public string MessageID { get; set; }
+
+            /// <summary>
+            /// 質問内容
+            /// </summary>
+            [JsonProperty("content")]
+            public string Content { get; set; }
+
+            /// <summary>
+            /// 質問詳細
+            /// </summary>
+            [JsonProperty("detail")]
+            public string Detail { get; set; }
+
+            /// <summary>
+            /// プロジェクトロールのID
+            /// </summary>
+            [JsonProperty("projectroleid")]
+            public ulong ProjectRoleID { get; set; }
+
+            /// <summary>
+            /// エラー内容
+            /// </summary>
+            [JsonProperty("error")]
+            public string Error { get; set; }
+
+            /// <summary>
+            /// 質問者
+            /// </summary>
+            [JsonProperty("auther")]
+            public string Auther { get; set; }
+
+            /// <summary>
+            /// 解決したか否か
+            /// </summary>
+            [JsonProperty("resolved")]
+            public bool Resolved { get; set; }
+
+            /// <summary>
+            /// 解決策リスト
+            /// </summary>
+            [JsonProperty("answers")]
+            public List<AFCQA_Solution> Solutions { get; set; }
+
+        }
+
+        public class AFCQA_Solution
+        {
+            /// <summary>
+            /// 解決案メッセージのID
+            /// </summary>
+            [JsonProperty("messageid")]
+            public string MessageID { get; set; }
+
+            /// <summary>
+            /// 解決案
+            /// </summary>
+            [JsonProperty("solution")]
+            public string Solution { get; set; }
+
+            /// <summary>
+            /// 解決者
+            /// </summary>
+            [JsonProperty("solver")]
+            public string Solver { get; set; }
+
+            /// <summary>
+            /// 解決案の状態
+            /// 0:保留，1:解決した，2:解決しなかった
+            /// </summary>
+            [JsonProperty("state")]
+            public string State { get; set; }
+        }
+
+        /// <summary>
+        /// commandstagによる通常コマンド
+        /// </summary>
+        /// <param name="messageParam"></param>
+        /// <returns></returns>
+        private async Task CommandText(SocketMessage messageParam)
+        {
+
+            var message = messageParam as SocketUserMessage;
+            if (message == null)
+            {
+                return;
+            }
+            Console.WriteLine("{0} {1}:{2}\nID:{3}", message.Channel.Name, message.Author.Username, message, message.Id);
+
+            if (message == null) { return; }
+
+            // コメントがユーザーかBotかの判定
+            if (message.Author.IsBot) { return; }
+
+
+            int argPos = 0;
+
+            // コマンドかどうか判定（今回は、「!」で判定）
+            if (!(message.HasCharPrefix(CommandsTag, ref argPos) || message.HasMentionPrefix(_client.CurrentUser, ref argPos))) { return; }
+
+            var context = new CommandContext(_client, message);
+
+            // 実行
+            var result = await _commands.ExecuteAsync(context, argPos, _services);
+
+            //実行できなかった場合
+            if (!result.IsSuccess)
+            {
+                string mycommand = context.Message.ToString();
+                if (mycommand == null)
+                {
+                    mycommand = "";
+                }
+
+                if (mycommand.Replace(commandstag, ' ') == mycommand)
+                {
+                    //コマンドタグが含まれないのでおわり
+                    return;
+                }
+
+                //コマンドタグを除去したテキストを取得
+                string mytext = mycommand.Remove(0, 1);
+
+                //質問のEmbedのタイトル
+                string EmbedTitle = "Question";
+
+                if (message.ReferencedMessage != null)
+                {
+                    //質問のembedにリプライすることで答える
+                    if (message.ReferencedMessage.Embeds.Count == 1)
+                    {
+                        foreach (Discord.Embed embed in message.ReferencedMessage.Embeds)
+                        {
+                            //タイトルと一致しないなら終了
+                            if (embed.Title != EmbedTitle)
+                            {
+                                return;
+                            }
+
+                        }
+
+                        //メッセージを送信したユーザー名の取得
+                        var author = message.Author.GlobalName;
+                        //メッセージを送信したユーザーのアイコンの取得
+                        var authorIcon = message.Author.GetAvatarUrl();
+
+
+                        string api_url = "https://script.google.com/macros/s/AKfycbxav3GHPiOiQgDmq3AZ-vF-Fl3pLKRfxdQomMLO0342wtGLgC2XEmkLHsbcwbZkrg8iIQ/exec";
+                        string url = api_url
+                            + "?messageid=" + PNBase.Replace_GAS(message.Id.ToString())
+                            + "&solution=" + PNBase.Replace_GAS(mytext)
+                            + "&solver=" + PNBase.Replace_GAS(message.Author.GlobalName)
+                            + "&state=" + PNBase.Replace_GAS(0.ToString())
+                            + "&messageid_q=" + PNBase.Replace_GAS(message.ReferencedMessage.Id.ToString())
+                            ;
+
+                        var request = (HttpWebRequest)HttpWebRequest.Create(url);
+                        var response = (HttpWebResponse)request.GetResponse();
+                        string responseContent = string.Empty;
+                        using (var responseStream = response.GetResponseStream())
+                        using (var stRead = new StreamReader(responseStream))
+                        {
+                            responseContent = stRead.ReadToEnd();
+                        }
+
+                        string json = responseContent;
+                        var newresult = JsonExtensions.DeserializeFromJson<apiResult>(json);
+
+                        //Embedの作成
+                        string Messages = "解決方法が提案されました．";
+
+                        var myEmbBuild = new EmbedBuilder()
+                            .WithTitle("Solution") // タイトルを設定
+                            ;
+
+                        if (newresult != null && newresult.Value == "ok")
+                        {
+                            myEmbBuild
+                                .AddField("解決案", mytext, false)
+                                .WithAuthor(author, authorIcon) //コマンド実行者の情報を埋め込み
+                                .WithColor(0x6A5ACD) //サイドの色を設定
+                                ;
+                        }
+                        else
+                        {
+                            Messages = "解決案の作成に失敗しました．";
+
+                            myEmbBuild.WithColor(Discord.Color.Red); //サイドの色を設定
+                        }
+                        myEmbBuild.WithDescription(Messages); // 説明を設定
+
+                        var myEmb = myEmbBuild.Build();
+                        await context.Channel.SendMessageAsync(embed: myEmb);
+
+                    }
+                }
+            }
+        }
+
 
     }
+
+    public class apiResult
+    {
+        /// <summary>
+        /// GASの結果
+        /// </summary>
+        [JsonProperty("value")]
+        public string Value { get; set; } = "";
+    }
+
 
 }
