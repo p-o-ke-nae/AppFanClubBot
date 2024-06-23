@@ -35,7 +35,6 @@ namespace AppFanClubBot
                 .AddField("Manufacture", "ポケなえ", true)
                 .AddField("Command", "「/」もしくは「!」(半角)", true)
                 .WithColor(0x6A5ACD) //サイドの色を設定
-                .WithThumbnailUrl("https://ozaroom.com/pokenaeLogo.png")
                 .Build();
 
             await command.FollowupAsync(embed: myEmb);

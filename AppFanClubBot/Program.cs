@@ -37,6 +37,8 @@
         /// </summary>
         private List<IDiscordReaction> ReactionCommands = new List<IDiscordReaction>();
 
+        private List<IDiscordReplyCommand> ReplyCommands = new List<IDiscordReplyCommand>();
+
         static void Main(string[] args)
             => new Program().MainAsync().GetAwaiter().GetResult();
 
@@ -98,6 +100,8 @@
             ReactionCommands.Add(new DiscordReaction_Question());
             ReactionCommands.Add(new DiscordReaction_Solution());
 
+            //リプライコマンド
+            ReplyCommands.Add(new DiscordReplyCommand_Solution());
 
             //次の行に書かれているstring token = "hoge"に先程取得したDiscordTokenを指定する。
             string token = settings.Token;
@@ -128,6 +132,12 @@
         /// <returns></returns>
         private async Task SlashCommandHandler(SocketSlashCommand command)
         {
+            if (command == null)
+            {
+                return;
+            }
+            Console.WriteLine("{0} {1}:{2}\nID:{3}", command.Channel.Name, command.User, command, command.Id);
+
             //botのコマンド待機時間を延長
             await command.DeferAsync();
 
@@ -168,6 +178,12 @@
         /// <returns></returns>
         private async Task HandleReactionAsync_Add(Cacheable<IUserMessage, ulong> message, Cacheable<IMessageChannel, ulong> channel, SocketReaction reaction)
         {
+            if (reaction == null)
+            {
+                return;
+            }
+            Console.WriteLine("{0} {1}:{2}\nID:{3}", reaction.Channel.Name, reaction.User, message, message.Id);
+
             var messageRe = await message.GetOrDownloadAsync();
             if (messageRe != null)
             {
@@ -204,16 +220,22 @@
         /// <returns></returns>
         private async Task HandleReactionAsync_Remove(Cacheable<IUserMessage, ulong> message, Cacheable<IMessageChannel, ulong> channel, SocketReaction reaction)
         {
-            var message2 = await message.GetOrDownloadAsync();
-            if (message2 != null)
+            if (reaction == null)
             {
-                var context = new CommandContext(_client, message2);
+                return;
+            }
+            Console.WriteLine("{0} {1}:{2}\nID:{3}", reaction.Channel.Name, reaction.User, message, message.Id);
+
+            var messageRe = await message.GetOrDownloadAsync();
+            if (messageRe != null)
+            {
+                var context = new CommandContext(_client, messageRe);
 
                 //IDからリアクションしたユーザーを指定
                 ulong id = reaction.UserId;
                 var user = await context.Guild.GetUserAsync(id, CacheMode.AllowDownload);
 
-                foreach (Embed embed in message2.Embeds)
+                foreach (Embed embed in messageRe.Embeds)
                 {
                     string embedTitle = embed.Title;
                     string embedDescription = embed.Description;
@@ -230,6 +252,71 @@
             }
 
         }
+
+        /// <summary>
+        /// commandstagによる通常コマンド
+        /// </summary>
+        /// <param name="messageParam"></param>
+        /// <returns></returns>
+        private async Task CommandText(SocketMessage messageParam)
+        {
+
+            var message = messageParam as SocketUserMessage;
+            if (message == null)
+            {
+                return;
+            }
+            Console.WriteLine("{0} {1}:{2}\nID:{3}", message.Channel.Name, message.Author.Username, message, message.Id);
+
+            if (message == null) { return; }
+
+            // コメントがユーザーかBotかの判定
+            if (message.Author.IsBot) { return; }
+
+
+            int argPos = 0;
+
+            // コマンドかどうか判定（今回は、「!」で判定）
+            if (!(message.HasCharPrefix(CommandsTag, ref argPos) || message.HasMentionPrefix(_client.CurrentUser, ref argPos))) { return; }
+
+            var context = new CommandContext(_client, message);
+
+            // 実行
+            var result = await _commands.ExecuteAsync(context, argPos, _services);
+
+            //実行できなかった場合
+            if (!result.IsSuccess)
+            {
+                //EmbedのFieldより質問IDを取得する
+                string messageid = "-";
+
+                //コマンドタグを除去したテキストを取得
+                string mytext = message.Content.Remove(0, 1);
+
+                if (message.ReferencedMessage != null)
+                {
+                    //リプライコマンドを実行する対象のEmbedを取得する
+                    if (message.ReferencedMessage.Embeds.Count == 1)
+                    {
+                        foreach (Discord.Embed embed in message.ReferencedMessage.Embeds)
+                        {
+                            //リプライコマンドなのでリプライ対象のコマンドを読み取る
+                            foreach (var myreplycommand in ReplyCommands)
+                            {
+                                if (embed.Title == myreplycommand.ReplyCommand)
+                                {
+                                    myreplycommand.Event(messageParam, _client, message, context);
+                                }
+                            }
+                        }
+                    }
+                }
+
+            }
+        }
+
+
+
 
         public class AFCQA_QA
         {
@@ -311,160 +398,7 @@
             public string State { get; set; }
         }
 
-        /// <summary>
-        /// commandstagによる通常コマンド
-        /// </summary>
-        /// <param name="messageParam"></param>
-        /// <returns></returns>
-        private async Task CommandText(SocketMessage messageParam)
-        {
-
-            var message = messageParam as SocketUserMessage;
-            if (message == null)
-            {
-                return;
-            }
-            Console.WriteLine("{0} {1}:{2}\nID:{3}", message.Channel.Name, message.Author.Username, message, message.Id);
-
-            if (message == null) { return; }
-
-            // コメントがユーザーかBotかの判定
-            if (message.Author.IsBot) { return; }
-
-
-            int argPos = 0;
-
-            // コマンドかどうか判定（今回は、「!」で判定）
-            if (!(message.HasCharPrefix(CommandsTag, ref argPos) || message.HasMentionPrefix(_client.CurrentUser, ref argPos))) { return; }
-
-            var context = new CommandContext(_client, message);
-
-            // 実行
-            var result = await _commands.ExecuteAsync(context, argPos, _services);
-
-            //実行できなかった場合
-            if (!result.IsSuccess)
-            {
-                string mycommand = context.Message.ToString();
-                if (mycommand == null)
-                {
-                    mycommand = "";
-                }
-
-                if (mycommand.Replace(commandstag, ' ') == mycommand)
-                {
-                    //コマンドタグが含まれないのでおわり
-                    return;
-                }
-
-                //コマンドタグを除去したテキストを取得
-                string mytext = mycommand.Remove(0, 1);
-
-                //質問のEmbedのタイトル
-                string EmbedTitle = "Question";
-
-                //EmbedのFieldより質問IDを取得する
-                string messageid = "-";
-
-                if (message.ReferencedMessage != null)
-                {
-                    //質問のembedにリプライすることで答える
-                    if (message.ReferencedMessage.Embeds.Count == 1)
-                    {
-                        foreach (Discord.Embed embed in message.ReferencedMessage.Embeds)
-                        {
-                            //タイトルと一致しないなら終了
-                            if (embed.Title != EmbedTitle)
-                            {
-                                return;
-                            }
-
-                            foreach (var filed in embed.Fields)
-                            {
-                                if (filed.Name == "ID")
-                                {
-                                    messageid = filed.Value.ToString();
-                                    break;
-                                }
-                            }
-
-                        }
-
-                        //メッセージを送信したユーザー名の取得
-                        var author = message.Author.GlobalName;
-                        //メッセージを送信したユーザーのアイコンの取得
-                        var authorIcon = message.Author.GetAvatarUrl();
-
-                        IEmote[] emotes = new IEmote[2];
-                        emotes[0] = new Emoji(iconUni[0]);
-                        emotes[1] = new Emoji(iconUni[1]);
-
-                        string api_url = "https://script.google.com/macros/s/AKfycbxav3GHPiOiQgDmq3AZ-vF-Fl3pLKRfxdQomMLO0342wtGLgC2XEmkLHsbcwbZkrg8iIQ/exec";
-                        string url = api_url
-                            + "?messageid=" + PNBase.Replace_GAS(message.Id.ToString())
-                            + "&solution=" + PNBase.Replace_GAS(mytext)
-                            + "&solver=" + PNBase.Replace_GAS(message.Author.GlobalName)
-                            + "&state=" + PNBase.Replace_GAS(0.ToString())
-                            + "&messageid_q=" + PNBase.Replace_GAS(messageid)
-                            ;
-
-                        var request = (HttpWebRequest)HttpWebRequest.Create(url);
-                        var response = (HttpWebResponse)request.GetResponse();
-                        string responseContent = string.Empty;
-                        using (var responseStream = response.GetResponseStream())
-                        using (var stRead = new StreamReader(responseStream))
-                        {
-                            responseContent = stRead.ReadToEnd();
-                        }
-
-                        string json = responseContent;
-                        var newresult = JsonExtensions.DeserializeFromJson<apiResult>(json);
-
-                        //Embedの作成
-                        string Messages = "解決方法が提案されました．";
-
-                        var myEmbBuild = new EmbedBuilder()
-                            .WithTitle("Solution") // タイトルを設定
-                            ;
-
-                        if (newresult != null && newresult.Value == "ok")
-                        {
-                            myEmbBuild
-                                .AddField("ID", message.Id.ToString(),false)
-                                .AddField("QuestionID",messageid,false)
-                                .AddField("解決案", mytext, false)
-                                .WithAuthor(author, authorIcon) //コマンド実行者の情報を埋め込み
-                                .WithColor(0x6A5ACD) //サイドの色を設定
-                                ;
-
-                            myEmbBuild.WithDescription(Messages); // 説明を設定
-
-                            var myEmb = myEmbBuild.Build();
-                            await context.Channel.SendMessageAsync(embed: myEmb).GetAwaiter().GetResult().AddReactionsAsync(emotes);
-
-                        }
-                        else
-                        {
-                            Messages = "解決案の作成に失敗しました．";
-
-                            myEmbBuild.WithColor(Discord.Color.Red); //サイドの色を設定
-
-                            myEmbBuild.WithDescription(Messages); // 説明を設定
-
-                            var myEmb = myEmbBuild.Build();
-                            await context.Channel.SendMessageAsync(embed: myEmb);
-
-                        }
-
-                    }
-                }
-            }
-        }
-
-        private string[] iconUni = {
-            "⭕",
-            "❌",
-        };
+        
 
     }
 

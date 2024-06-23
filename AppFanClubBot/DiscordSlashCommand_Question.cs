@@ -9,6 +9,7 @@ using System.Text;
 using System.Threading.Tasks;
 
 using AppFanClubBot;
+using System.Data;
 
 namespace AppFanClubBot
 {
@@ -129,7 +130,7 @@ namespace AppFanClubBot
             myEmbBuild.WithDescription(Messages); // 説明を設定
 
             var myEmb = myEmbBuild.Build();
-            await command.FollowupAsync(embed: myEmb);
+            await command.FollowupAsync("<@&" + roleID + ">", embed: myEmb);
 
         }
     }

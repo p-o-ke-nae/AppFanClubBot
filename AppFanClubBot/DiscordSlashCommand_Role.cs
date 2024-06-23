@@ -29,25 +29,26 @@ namespace AppFanClubBot
 
             var embed = new EmbedBuilder();
 
-            embed.WithTitle("ロール付与・解除");
-
-            embed.WithColor(0x6A5ACD);
-
             description = "欲しいロールに対応したリアクションを押してください．\n" +
                 "ロールを解除したいときはリアクションをもう一度押して外してください．";
 
+            embed.WithTitle("ロール付与・解除");
+            embed.WithColor(0x6A5ACD);
             embed.WithDescription(description);
 
             ulong myguildID = (ulong)command.GuildId;
             var myguild = client.GetGuild(myguildID);
 
             int roleindex = 0;
+            bool sendFlg = false;
             foreach (var myrole in myguild.Roles)
             {
                 //チャンネル管理のできないロールのみbotで管理
                 if (myrole != null && RoleNotPermissions(myrole) && myrole.Name != "@everyone")
                 {
                     embed.AddField(iconUni[roleindex], myrole.Name, false);
+
+                    sendFlg = true;
 
                     Array.Resize(ref emotes, roleindex + 1);
                     emotes[roleindex] = new Emoji(iconUni[roleindex]);
@@ -57,13 +58,37 @@ namespace AppFanClubBot
                 //絵文字の種類数超えたら強制終了
                 if (roleindex >= iconUni.Length)
                 {
-                    break;
+                    RoleEmbedSend(embed,emotes,command);
+
+                    roleindex = 0;
+                    sendFlg = false;
+
+                    embed = new EmbedBuilder();
+
+                    embed.WithTitle("ロール付与・解除");
+                    embed.WithColor(0x6A5ACD);
+                    embed.WithDescription(description);
                 }
 
             }
 
-            await command.FollowupAsync(embed: embed.Build()).GetAwaiter().GetResult().AddReactionsAsync(emotes);
+            //フィールドが1つ以上あれば送信する
+            if(sendFlg == true)
+            {
+                RoleEmbedSend(embed, emotes, command);
+            }
 
+        }
+
+        /// <summary>
+        /// Embedとリアクションを送信する
+        /// </summary>
+        /// <param name="embed"></param>
+        /// <param name="emotes"></param>
+        /// <param name="command"></param>
+        public async void RoleEmbedSend(EmbedBuilder embed, IEmote[] emotes, SocketSlashCommand command)
+        {
+            await command.FollowupAsync(embed: embed.Build()).GetAwaiter().GetResult().AddReactionsAsync(emotes);
         }
 
         //ロール付与のために必要なもの
