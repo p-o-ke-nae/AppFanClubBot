@@ -32,6 +32,10 @@
         /// スラッシュコマンドを格納
         /// </summary>
         private List<IDiscordSlashCommand> SlashCommands = new List<IDiscordSlashCommand>();
+        /// <summary>
+        /// リアクションによるコマンドを格納
+        /// </summary>
+        private List<IDiscordReaction> ReactionCommands = new List<IDiscordReaction>();
 
         static void Main(string[] args)
             => new Program().MainAsync().GetAwaiter().GetResult();
@@ -82,11 +86,17 @@
             _client.RoleCreated += ToolCateMakeChannel;
 
             //コマンドを格納
+            //スラッシュコマンド
             SlashCommands.Add(new DiscordSlashCommand_Question());
             SlashCommands.Add(new DiscordSlashCommand_NewProject());
             SlashCommands.Add(new DiscordSlashCommand_Role());
             SlashCommands.Add(new DiscordSlashCommand_Test());
             SlashCommands.Add(new DiscordSlashCommand_Outline());
+
+            //リアクション
+            ReactionCommands.Add(new DiscordReaction_Role());
+            ReactionCommands.Add(new DiscordReaction_Question());
+            ReactionCommands.Add(new DiscordReaction_Solution());
 
 
             //次の行に書かれているstring token = "hoge"に先程取得したDiscordTokenを指定する。
@@ -112,7 +122,6 @@
         }
 
         /// <summary>
-        /// 基本的にはここでコマンドを作る
         /// スラッシュコマンドを受け取ったときのイベント
         /// </summary>
         /// <param name="command"></param>
@@ -173,123 +182,12 @@
                     string embedTitle = embed.Title;
                     string embedDescription = embed.Description;
 
-                    switch (embedTitle)
+                    foreach(var myreaction in ReactionCommands)
                     {
-                        case "ロール付与・解除":
-                            {
-                                //ロール付与
-                                for (int i = 0; i < embed.Fields.Length; i++)
-                                {
-                                    if (embed.Fields[i].Name == reaction.Emote.Name)
-                                    {
-                                        var role = context.Guild.Roles.FirstOrDefault(x => x.Name == embed.Fields[i].Value);
-                                        if (role != null)
-                                        {
-                                            await (user).AddRoleAsync(role);
-                                        }
-                                    }
-                                }
-
-                                break;
-                            }
-                        case "Question":
-                            {
-                                //質問を解決済みにする
-                                string api_url = "https://script.google.com/macros/s/AKfycbzaiVXb2GW0oQXYsITxRrxykuEu-SuIfDm_X2M1jK9hnXjf4XDl5FuQT0R7qv9Hc6Jn-Q/exec";
-                                string url = api_url
-                                    + "?messageid=" + PNBase.Replace_GAS(messageRe.Id.ToString())
-                                    + "&resolved=" + true
-                                    ;
-
-                                var request = (HttpWebRequest)HttpWebRequest.Create(url);
-                                var response = (HttpWebResponse)request.GetResponse();
-                                string responseContent = string.Empty;
-                                using (var responseStream = response.GetResponseStream())
-                                using (var stRead = new StreamReader(responseStream))
-                                {
-                                    responseContent = stRead.ReadToEnd();
-                                }
-
-                                string json = responseContent;
-                                var newresult = JsonExtensions.DeserializeFromJson<apiResult>(json);
-
-
-
-                                ////Embedの作成
-                                //string Messages = "質問が解決しました！";
-
-                                //var myEmbBuild = new EmbedBuilder()
-                                //    .WithTitle("test") // タイトルを設定
-                                //    ;
-
-                                //if (newresult != null && newresult.Value == "ok")
-                                //{
-                                //    string api_url2 = "https://script.google.com/macros/s/AKfycbxfw1UQy99ncqJUwtkz4fgZw4TdWZsigk5-5PLHiUq7MOHWaq7pWsK7-km5WHrLUn-Z7Q/exec";
-                                //    string url2 = api_url
-                                //        + "?messageid=" + PNBase.Replace_GAS(messageRe.Id.ToString())
-                                //        ;
-
-                                //    var myjson = JsonExtensions.jsonFromMyGAS(url2);
-                                //    var myAFCQA = JsonExtensions.DeserializeFromJson <AFCQA_QA>(myjson);
-
-                                //    if (myAFCQA != null)
-                                //    {
-                                //        myEmbBuild
-                                //            .AddField("関連プロジェクト・言語", myAFCQA.ProjectRoleID, false)
-                                //            .AddField("内容", myAFCQA.Content, false)
-                                //            .AddField("詳細", myAFCQA.Detail, false)
-                                //            .AddField("エラー内容", myAFCQA.Error, false)
-                                //            .WithColor(0x6A5ACD) //サイドの色を設定
-                                //            ;
-                                //    }
-                                //    else
-                                //    {
-                                //        //myEmbBuild
-                                //        //    .AddField("関連プロジェクト・言語", roleName, false)
-                                //        //    .AddField("内容", content, false)
-                                //        //    .AddField("詳細", detail, false)
-                                //        //    .AddField("エラー内容", errormess, false)
-                                //        //    .WithAuthor(author, authorIcon) //コマンド実行者の情報を埋め込み
-                                //        //    .WithColor(0x6A5ACD) //サイドの色を設定
-                                //        //    ;
-                                //    }
-                                //}
-                                //else
-                                //{
-                                //    Messages = "質問の作成に失敗しました．";
-
-                                //    myEmbBuild.WithColor(Discord.Color.Red); //サイドの色を設定
-                                //}
-                                //myEmbBuild.WithDescription(Messages); // 説明を設定
-
-                                //var myEmb = myEmbBuild.Build();
-                                ////await channel. Async(embed: myEmb);
-
-                                break;
-                            }
-                        case "Solution":
-                            {
-                                //解決案を採用する
-                                for (int i = 0; i < embed.Fields.Length; i++)
-                                {
-                                    if (embed.Fields[i].Name == reaction.Emote.Name)
-                                    {
-                                        var role = context.Guild.Roles.FirstOrDefault(x => x.Name == embed.Fields[i].Value);
-                                        if (role != null)
-                                        {
-                                            await (user).AddRoleAsync(role);
-                                        }
-                                    }
-                                }
-
-                                break;
-                            }
-                        default:
-                            {
-                                
-                                break;
-                            }
-
+                        if(embedTitle == myreaction.Command)
+                        {
+                            myreaction.ReactionAddEvent(reaction,embed,context,user,message);
+                        }
                     }
                 }
 
@@ -320,31 +218,12 @@
                     string embedTitle = embed.Title;
                     string embedDescription = embed.Description;
 
-
-                    switch (embedTitle)
+                    foreach (var myreaction in ReactionCommands)
                     {
-                        case "ロール付与・解除":
-                            {
-                                //ロール解除
-                                for (int i = 0; i < embed.Fields.Length; i++)
-                                {
-                                    if (embed.Fields[i].Name == reaction.Emote.Name)
-                                    {
-                                        var role = context.Guild.Roles.FirstOrDefault(x => x.Name == embed.Fields[i].Value);
-                                        if (role != null)
-                                        {
-                                            await (user).RemoveRoleAsync(role);
-                                        }
-                                    }
-                                }
-
-                                break;
-                            }
-                        default:
-                            {
-                                
-                                break;
-                            }
+                        if (embedTitle == myreaction.Command)
+                        {
+                            myreaction.ReactionRemoveEvent(reaction, embed, context, user, message);
+                        }
                     }
                 }
 
@@ -484,6 +363,9 @@
                 //質問のEmbedのタイトル
                 string EmbedTitle = "Question";
 
+                //EmbedのFieldより質問IDを取得する
+                string messageid = "-";
+
                 if (message.ReferencedMessage != null)
                 {
                     //質問のembedにリプライすることで答える
@@ -497,6 +379,15 @@
                                 return;
                             }
 
+                            foreach (var filed in embed.Fields)
+                            {
+                                if (filed.Name == "ID")
+                                {
+                                    messageid = filed.Value.ToString();
+                                    break;
+                                }
+                            }
+
                         }
 
                         //メッセージを送信したユーザー名の取得
@@ -504,6 +395,9 @@
                         //メッセージを送信したユーザーのアイコンの取得
                         var authorIcon = message.Author.GetAvatarUrl();
 
+                        IEmote[] emotes = new IEmote[2];
+                        emotes[0] = new Emoji(iconUni[0]);
+                        emotes[1] = new Emoji(iconUni[1]);
 
                         string api_url = "https://script.google.com/macros/s/AKfycbxav3GHPiOiQgDmq3AZ-vF-Fl3pLKRfxdQomMLO0342wtGLgC2XEmkLHsbcwbZkrg8iIQ/exec";
                         string url = api_url
@@ -511,7 +405,7 @@
                             + "&solution=" + PNBase.Replace_GAS(mytext)
                             + "&solver=" + PNBase.Replace_GAS(message.Author.GlobalName)
                             + "&state=" + PNBase.Replace_GAS(0.ToString())
-                            + "&messageid_q=" + PNBase.Replace_GAS(message.ReferencedMessage.Id.ToString())
+                            + "&messageid_q=" + PNBase.Replace_GAS(messageid)
                             ;
 
                         var request = (HttpWebRequest)HttpWebRequest.Create(url);
@@ -536,27 +430,41 @@
                         if (newresult != null && newresult.Value == "ok")
                         {
                             myEmbBuild
+                                .AddField("ID", message.Id.ToString(),false)
+                                .AddField("QuestionID",messageid,false)
                                 .AddField("解決案", mytext, false)
                                 .WithAuthor(author, authorIcon) //コマンド実行者の情報を埋め込み
                                 .WithColor(0x6A5ACD) //サイドの色を設定
                                 ;
+
+                            myEmbBuild.WithDescription(Messages); // 説明を設定
+
+                            var myEmb = myEmbBuild.Build();
+                            await context.Channel.SendMessageAsync(embed: myEmb).GetAwaiter().GetResult().AddReactionsAsync(emotes);
+
                         }
                         else
                         {
                             Messages = "解決案の作成に失敗しました．";
 
                             myEmbBuild.WithColor(Discord.Color.Red); //サイドの色を設定
-                        }
-                        myEmbBuild.WithDescription(Messages); // 説明を設定
 
-                        var myEmb = myEmbBuild.Build();
-                        await context.Channel.SendMessageAsync(embed: myEmb);
+                            myEmbBuild.WithDescription(Messages); // 説明を設定
+
+                            var myEmb = myEmbBuild.Build();
+                            await context.Channel.SendMessageAsync(embed: myEmb);
+
+                        }
 
                     }
                 }
             }
         }
 
+        private string[] iconUni = {
+            "⭕",
+            "❌",
+        };
 
     }
 

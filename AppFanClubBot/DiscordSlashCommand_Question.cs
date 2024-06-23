@@ -32,6 +32,7 @@ namespace AppFanClubBot
             ulong roleID = 0;
             string roleName = "-";
             string errormess = "-";
+            string id = "-";
 
             foreach (var commandoption in command.Data.Options)
             {
@@ -65,11 +66,6 @@ namespace AppFanClubBot
                     errormess = commandoption.Value.ToString();
 
                 }
-                else if (commandoption.Name == "error")
-                {
-                    errormess = commandoption.Value.ToString();
-
-                }
             }
 
             //メッセージを送信したユーザー名の取得
@@ -77,10 +73,14 @@ namespace AppFanClubBot
             //メッセージを送信したユーザーのアイコンの取得
             var authorIcon = command.User.GetAvatarUrl();
 
+            //idを生成
+            DateTime dateTime = DateTime.Now;
+            id = roleID + dateTime.ToString("yyyyMMddhhmmss");
+
 
             string api_url = "https://script.google.com/macros/s/AKfycbzaiVXb2GW0oQXYsITxRrxykuEu-SuIfDm_X2M1jK9hnXjf4XDl5FuQT0R7qv9Hc6Jn-Q/exec";
             string url = api_url
-                + "?messageid=" + PNBase.Replace_GAS(command.Id.ToString())
+                + "?messageid=" + PNBase.Replace_GAS(id)
                 + "&content=" + PNBase.Replace_GAS(content)
                 + "&detail=" + PNBase.Replace_GAS(detail)
                 + "&projectroleid=" + PNBase.Replace_GAS(roleID.ToString())
@@ -112,6 +112,7 @@ namespace AppFanClubBot
             {
                 myEmbBuild
                     .AddField("関連プロジェクト・言語", roleName, false)
+                    .AddField("ID", id, false)
                     .AddField("内容", content, false)
                     .AddField("詳細", detail, false)
                     .AddField("エラー内容", errormess, false)

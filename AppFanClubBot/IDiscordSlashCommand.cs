@@ -10,7 +10,7 @@ namespace pokenaeBaseClass
     public interface IDiscordSlashCommand
     {
         /// <summary>
-        /// コマンド名を格納
+        /// コマンド名
         /// </summary>
         public string Command { get; }
 
