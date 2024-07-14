@@ -361,7 +361,7 @@
 
                     await mychannel.SendMessageAsync(embed: myEmb);
                 }
-                else if (svstate1.VoiceChannel != null && svstate2.VoiceChannel == null && svstate1.VoiceChannel.ConnectedUsers.Count == 1)
+                else if (svstate1.VoiceChannel != null && svstate2.VoiceChannel == null && svstate1.VoiceChannel.ConnectedUsers.Count == 0)
                 {
                     string Messages = string.Format("【{0}：{1}】は終了されました．"
                         , svstate1.VoiceChannel.Category.Name, svstate1.VoiceChannel.Name);
