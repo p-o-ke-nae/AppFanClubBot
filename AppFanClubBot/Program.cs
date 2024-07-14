@@ -361,6 +361,22 @@
 
                     await mychannel.SendMessageAsync(embed: myEmb);
                 }
+                else if (svstate1.VoiceChannel != null && svstate2.VoiceChannel == null && svstate1.VoiceChannel.ConnectedUsers.Count == 1)
+                {
+                    string Messages = string.Format("【{0}：{1}】は終了されました．"
+                        , svstate1.VoiceChannel.Category.Name, svstate1.VoiceChannel.Name);
+
+                    DateTime now = DateTime.Now;
+
+                    var myEmb = new EmbedBuilder()
+                        .WithTitle("VC終了のお知らせ") // タイトルを設定
+                        .WithDescription(Messages) // 説明を設定
+                        .AddField("終了時間", now.ToString("yyyy/MM/dd hh:mm"), true)
+                        .WithColor(0xFF8C00) //サイドの色を設定
+                        .Build();
+
+                    await mychannel.SendMessageAsync(embed: myEmb);
+                }
             }
 
         }
