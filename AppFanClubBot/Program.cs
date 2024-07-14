@@ -20,6 +20,7 @@
     using static System.Collections.Specialized.BitVector32;
     using pokenaeBaseClass;
     using System.Reflection.Metadata;
+    using System.Collections;
 
     class Program
     {
@@ -86,6 +87,9 @@
 
             //ロールが作られたときのイベント
             _client.RoleCreated += ToolCateMakeChannel;
+
+            //ボイスチャンネルのステータス変更イベント
+            _client.UserVoiceStateUpdated += HandleUserVoiceStateAsync;
 
             //コマンドを格納
             //スラッシュコマンド
@@ -315,6 +319,51 @@
             }
         }
 
+        /// <summary>
+        /// ユーザがボイスチャンネルのステータスを変更した時のイベント
+        /// </summary>
+        /// <param name="role"></param>
+        /// <returns></returns>
+        public async Task HandleUserVoiceStateAsync(SocketUser user,SocketVoiceState svstate1, SocketVoiceState svstate2)
+        {
+            if (user == null)
+            {
+                return;
+            }
+
+            if (svstate2.VoiceChannel != null && (svstate1.VoiceChannel == null || svstate1.VoiceChannel != null && svstate2.VoiceChannel.ConnectedUsers.Count != svstate1.VoiceChannel.ConnectedUsers.Count))
+            {
+                Console.WriteLine("{0} {1}:VCに参加しました．", svstate2.VoiceChannel.Name, user.GlobalName);
+            }
+            else if (svstate1.VoiceChannel != null && (svstate2.VoiceChannel == null || svstate2.VoiceChannel != null && svstate2.VoiceChannel.ConnectedUsers.Count != svstate1.VoiceChannel.ConnectedUsers.Count))
+            {
+                Console.WriteLine("{0} {1}:VCから退出しました．", svstate1.VoiceChannel.Name, user.GlobalName);
+            }
+
+            var mychannel = _client.GetChannel(1247646468286713997) as IMessageChannel;
+
+            if(mychannel != null) 
+            {
+                //一人目の時のみメッセージを送信
+                if (svstate2.VoiceChannel != null && svstate1.VoiceChannel == null && svstate2.VoiceChannel.ConnectedUsers.Count == 1)
+                {
+                    string Messages = string.Format("【{0}：{1}】で{2}さんがボイスチャンネルを開始しました．"
+                        , svstate2.VoiceChannel.Category.Name, svstate2.VoiceChannel.Name,user.GlobalName);
+
+                    DateTime now = DateTime.Now;
+
+                    var myEmb = new EmbedBuilder()
+                        .WithTitle("VC開始のお知らせ") // タイトルを設定
+                        .WithDescription(Messages) // 説明を設定
+                        .AddField("開始時間", now.ToString("yyyy/MM/dd hh:mm"), true)
+                        .WithColor(0x6A5ACD) //サイドの色を設定
+                        .Build();
+
+                    await mychannel.SendMessageAsync(embed: myEmb);
+                }
+            }
+
+        }
 
 
 
