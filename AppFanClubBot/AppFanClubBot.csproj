@@ -17,4 +17,10 @@
     <ProjectReference Include="..\..\pokenaeBaseClass\pokenaeBaseClass\pokenaeBaseClass.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <None Update="Settings.job">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
 </Project>

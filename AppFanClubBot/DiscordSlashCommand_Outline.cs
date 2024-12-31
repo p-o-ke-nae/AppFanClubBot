@@ -10,7 +10,7 @@ using System.Threading.Tasks;
 namespace AppFanClubBot
 {
     /// <summary>
-    /// botの自己紹介・概要
+    /// botの自己紹介・概要 
     /// </summary>
     public class DiscordSlashCommand_Outline : IDiscordSlashCommand
     {
